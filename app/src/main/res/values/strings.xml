@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Albana Stream</string>
+    <string name="loading_text">Memuat Albana Stream...</string>
+    <string name="error_offline">Koneksi Internet Terputus</string>
+    <string name="retry_button">Coba Lagi</string>
+    <string name="channel_name">Albana Stream Audio Service</string>
+    <string name="channel_desc">Menjaga pemutaran siaran audio Albana Stream tetap aktif saat layar mati</string>
+</resources>
