@@ -52,7 +52,6 @@ public class MainActivity extends AppCompatActivity {
         initViews();
         checkPermissions();
         setupWebView();
-        startAudioKeepAlive();
         checkBatteryOptimization();
 
         loadUrl(RADIO_URL);
@@ -196,6 +195,7 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         });
+        webView.addJavascriptInterface(new WebAppInterface(), "AlbanaNative");
     }
 
     private void loadUrl(String url) {
@@ -203,13 +203,30 @@ public class MainActivity extends AppCompatActivity {
         webView.loadUrl(url);
     }
 
-    private void startAudioKeepAlive() {
-        Intent serviceIntent = new Intent(this, AudioService.class);
-        serviceIntent.setAction(AudioService.ACTION_START);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent);
-        } else {
-            startService(serviceIntent);
+    public class WebAppInterface {
+        @android.webkit.JavascriptInterface
+        public void startAudioPlayback(String title) {
+            runOnUiThread(() -> {
+                Intent serviceIntent = new Intent(MainActivity.this, AudioService.class);
+                serviceIntent.setAction(AudioService.ACTION_START);
+                if (title != null && !title.trim().isEmpty()) {
+                    serviceIntent.putExtra(AudioService.EXTRA_ROOM_TITLE, title.trim());
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(serviceIntent);
+                } else {
+                    startService(serviceIntent);
+                }
+            });
+        }
+
+        @android.webkit.JavascriptInterface
+        public void stopAudioPlayback() {
+            runOnUiThread(() -> {
+                Intent serviceIntent = new Intent(MainActivity.this, AudioService.class);
+                serviceIntent.setAction(AudioService.ACTION_STOP);
+                startService(serviceIntent);
+            });
         }
     }
 
@@ -226,6 +243,9 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (System.currentTimeMillis() - backPressedTime < 2000) {
+            Intent stopIntent = new Intent(this, AudioService.class);
+            stopIntent.setAction(AudioService.ACTION_STOP);
+            startService(stopIntent);
             super.onBackPressed();
         } else {
             backPressedTime = System.currentTimeMillis();
@@ -251,11 +271,14 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        Intent stopIntent = new Intent(this, AudioService.class);
+        stopIntent.setAction(AudioService.ACTION_STOP);
+        startService(stopIntent);
+
         if (webView != null) {
             webView.onPause();
             webView.destroy();
         }
-        stopService(new Intent(this, AudioService.class));
         super.onDestroy();
     }
 }

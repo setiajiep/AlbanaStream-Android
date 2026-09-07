@@ -18,6 +18,7 @@ import androidx.core.app.NotificationCompat;
 public class AudioService extends Service {
     public static final String ACTION_START = "ACTION_START";
     public static final String ACTION_STOP = "ACTION_STOP";
+    public static final String EXTRA_ROOM_TITLE = "ROOM_TITLE";
     private static final String CHANNEL_ID = "radio_playback_channel";
     private static final int NOTIFICATION_ID = 1001;
 
@@ -37,11 +38,12 @@ public class AudioService extends Service {
             return START_NOT_STICKY;
         }
 
-        startForegroundPlayback();
-        return START_STICKY;
+        String roomTitle = intent != null ? intent.getStringExtra(EXTRA_ROOM_TITLE) : null;
+        startForegroundPlayback(roomTitle);
+        return START_NOT_STICKY;
     }
 
-    private void startForegroundPlayback() {
+    private void startForegroundPlayback(String roomTitle) {
         Intent notificationIntent = new Intent(this, MainActivity.class);
         notificationIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent pendingIntent = PendingIntent.getActivity(
@@ -49,15 +51,27 @@ public class AudioService extends Service {
                 PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
         );
 
+        Intent stopIntent = new Intent(this, AudioService.class);
+        stopIntent.setAction(ACTION_STOP);
+        PendingIntent stopPendingIntent = PendingIntent.getService(
+                this, 1, stopIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
+        );
+
+        String subText = (roomTitle != null && !roomTitle.trim().isEmpty())
+                ? roomTitle.trim()
+                : "Siaran audio sedang berlangsung";
+
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle("Albana Stream — Live Audio")
-                .setContentText("Siaran audio sedang berlangsung")
+                .setContentText(subText)
                 .setSmallIcon(R.drawable.ic_stat_radio)
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
+                .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Hentikan", stopPendingIntent)
                 .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build();
 
         acquireLocks();
@@ -72,7 +86,15 @@ public class AudioService extends Service {
 
     private void stopForegroundService() {
         releaseLocks();
-        stopForeground(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE);
+        } else {
+            stopForeground(true);
+        }
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm != null) {
+            nm.cancel(NOTIFICATION_ID);
+        }
         stopSelf();
     }
 
@@ -126,8 +148,23 @@ public class AudioService extends Service {
     }
 
     @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        stopForegroundService();
+        super.onTaskRemoved(rootIntent);
+    }
+
+    @Override
     public void onDestroy() {
         releaseLocks();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE);
+        } else {
+            stopForeground(true);
+        }
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm != null) {
+            nm.cancel(NOTIFICATION_ID);
+        }
         super.onDestroy();
     }
 
