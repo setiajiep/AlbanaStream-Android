@@ -2,6 +2,7 @@ package id.web.hsblink.radiokajian;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.DownloadManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -9,10 +10,13 @@ import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.view.View;
+import android.webkit.CookieManager;
 import android.webkit.PermissionRequest;
+import android.webkit.URLUtil;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -141,7 +145,40 @@ public class MainActivity extends AppCompatActivity {
         }
 
         String defaultUA = settings.getUserAgentString();
-        settings.setUserAgentString(defaultUA + " AlbanaStreamApp/1.3.0 (Android Native App)");
+        settings.setUserAgentString(defaultUA + " AlbanaStreamApp/1.3.2 (Android Native App)");
+
+        webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
+            try {
+                DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
+                if (mimeType != null && !mimeType.isEmpty()) {
+                    request.setMimeType(mimeType);
+                }
+                String cookies = CookieManager.getInstance().getCookie(url);
+                if (cookies != null) {
+                    request.addRequestHeader("cookie", cookies);
+                }
+                request.addRequestHeader("User-Agent", userAgent);
+                request.setDescription("Mengunduh rekaman kajian...");
+                String filename = URLUtil.guessFileName(url, contentDisposition, mimeType);
+                if (filename == null || filename.isEmpty() || filename.equals("downloadfile")) {
+                    filename = "rekaman_kajian.webm";
+                }
+                request.setTitle(filename);
+                request.allowScanningByMediaScanner();
+                request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename);
+                DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+                if (dm != null) {
+                    dm.enqueue(request);
+                    Toast.makeText(MainActivity.this, "Mulai mengunduh: " + filename, Toast.LENGTH_SHORT).show();
+                }
+            } catch (Exception e) {
+                try {
+                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                    startActivity(intent);
+                } catch (Exception ignored) {}
+            }
+        });
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -167,6 +204,15 @@ public class MainActivity extends AppCompatActivity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
                 String host = uri.getHost();
+                String path = uri.getPath();
+
+                if (path != null && path.contains("/download")) {
+                    try {
+                        Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+                        startActivity(intent);
+                        return true;
+                    } catch (Exception ignored) {}
+                }
 
                 if (host != null && (host.contains("hsblink.web.id") || host.contains("workers.dev") || host.contains("cloudflare.com"))) {
                     return false; // Stay inside WebView
@@ -226,6 +272,33 @@ public class MainActivity extends AppCompatActivity {
                 Intent serviceIntent = new Intent(MainActivity.this, AudioService.class);
                 serviceIntent.setAction(AudioService.ACTION_STOP);
                 startService(serviceIntent);
+            });
+        }
+
+        @android.webkit.JavascriptInterface
+        public void downloadFile(String url, String filename) {
+            runOnUiThread(() -> {
+                try {
+                    DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
+                    request.setDescription("Mengunduh rekaman kajian...");
+                    String targetName = (filename != null && !filename.trim().isEmpty()) ? filename.trim() : "rekaman_kajian.webm";
+                    request.setTitle(targetName);
+                    request.allowScanningByMediaScanner();
+                    request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                    request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, targetName);
+                    DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+                    if (dm != null) {
+                        dm.enqueue(request);
+                        Toast.makeText(MainActivity.this, "Mengunduh " + targetName + " ke folder Download", Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception e) {
+                    try {
+                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                        startActivity(intent);
+                    } catch (Exception ex) {
+                        Toast.makeText(MainActivity.this, "Gagal mengunduh: " + ex.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                }
             });
         }
     }
