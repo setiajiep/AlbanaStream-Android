@@ -51,6 +51,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.activity_main);
 
         initViews();
@@ -145,7 +146,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         String defaultUA = settings.getUserAgentString();
-        settings.setUserAgentString(defaultUA + " AlbanaStreamApp/1.3.2 (Android Native App)");
+        settings.setUserAgentString(defaultUA + " AlbanaStreamApp/1.3.3 (Android Native App)");
 
         webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
             try {
@@ -214,7 +215,7 @@ public class MainActivity extends AppCompatActivity {
                     } catch (Exception ignored) {}
                 }
 
-                if (host != null && (host.contains("hsblink.web.id") || host.contains("workers.dev") || host.contains("cloudflare.com"))) {
+                if (host != null && (host.contains("hsblink.web.id") || host.contains("workers.dev") || host.contains("cloudflare.com") || host.contains("ponpesburhanalbana.web.id"))) {
                     return false; // Stay inside WebView
                 }
 
@@ -272,6 +273,34 @@ public class MainActivity extends AppCompatActivity {
                 Intent serviceIntent = new Intent(MainActivity.this, AudioService.class);
                 serviceIntent.setAction(AudioService.ACTION_STOP);
                 startService(serviceIntent);
+            });
+        }
+
+        @android.webkit.JavascriptInterface
+        public void setDimMode(boolean enable) {
+            runOnUiThread(() -> {
+                try {
+                    android.view.WindowManager.LayoutParams layout = getWindow().getAttributes();
+                    if (enable) {
+                        layout.screenBrightness = 0.01f; // Kecerahan minimum untuk mode hemat baterai
+                    } else {
+                        layout.screenBrightness = android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE; // Kembalikan ke standar sistem
+                    }
+                    getWindow().setAttributes(layout);
+                } catch (Exception ignored) {}
+            });
+        }
+
+        @android.webkit.JavascriptInterface
+        public void keepScreenOn(boolean keepOn) {
+            runOnUiThread(() -> {
+                try {
+                    if (keepOn) {
+                        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    } else {
+                        getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    }
+                } catch (Exception ignored) {}
             });
         }
 
